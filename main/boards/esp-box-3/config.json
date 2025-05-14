@@ -3,9 +3,7 @@
     "builds": [
         {
             "name": "esp-box-3",
-            "sdkconfig_append": [
-                "CONFIG_USE_DEVICE_AEC=y"
-            ]
+            "sdkconfig_append": []
         }
     ]
 }
