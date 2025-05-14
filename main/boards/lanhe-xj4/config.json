@@ -1,0 +1,9 @@
+{
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "lanhe-xj4",
+            "sdkconfig_append": []
+        }
+    ]
+}

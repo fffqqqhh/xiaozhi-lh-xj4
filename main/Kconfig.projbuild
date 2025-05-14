@@ -148,6 +148,8 @@ choice BOARD_TYPE
         bool "元控·青春"
     config BOARD_TYPE_ESP_S3_LCD_EV_Board
         bool "乐鑫ESP S3 LCD EV Board开发板"
+    config BOARD_TYPE_LANHE_XJ4
+        bool "蓝禾XJ4"
 endchoice
 
 choice ESP_S3_LCD_EV_Board_Version_TYPE
@@ -251,7 +253,7 @@ config USE_AUDIO_PROCESSOR
 config USE_DEVICE_AEC
     bool "在通话过程中启用设备端 AEC"
     default n
-    depends on USE_AUDIO_PROCESSOR && (BOARD_TYPE_ESP_BOX_3 || BOARD_TYPE_ESP_BOX || BOARD_TYPE_ESP_BOX_LITE || BOARD_TYPE_LICHUANG_DEV || BOARD_TYPE_ESP32S3_KORVO2_V3)
+    depends on USE_AUDIO_PROCESSOR && (BOARD_TYPE_ESP_BOX_3 || BOARD_TYPE_ESP_BOX || BOARD_TYPE_ESP_BOX_LITE || BOARD_TYPE_LICHUANG_DEV || BOARD_TYPE_ESP32S3_KORVO2_V3 || BOARD_TYPE_LANHE_XJ4)
     help
         因为性能不够，不建议和微信聊天界面风格同时开启
 
