@@ -269,7 +269,7 @@ void Application::ToggleChatState() {
         return;
     }
 
-    if (device_state_ == kDeviceStateIdle) {
+    if (device_state_ == kDeviceStateIdle) { //从空闲状态到连接状态
         Schedule([this]() {
             SetDeviceState(kDeviceStateConnecting);
             if (!protocol_->OpenAudioChannel()) {
@@ -278,11 +278,11 @@ void Application::ToggleChatState() {
 
             SetListeningMode(realtime_chat_enabled_ ? kListeningModeRealtime : kListeningModeAutoStop);
         });
-    } else if (device_state_ == kDeviceStateSpeaking) {
+    } else if (device_state_ == kDeviceStateSpeaking) { //从说话状态到停止说话状态
         Schedule([this]() {
-            AbortSpeaking(kAbortReasonNone);
+            AbortSpeaking(kAbortReasonNone); //参数表示没有特定的停止原因
         });
-    } else if (device_state_ == kDeviceStateListening) {
+    } else if (device_state_ == kDeviceStateListening) { //从监听状态到停止监听状态
         Schedule([this]() {
             protocol_->CloseAudioChannel();
         });
@@ -377,6 +377,8 @@ void Application::Start() {
     }, "audio_loop", 4096 * 2, this, 8, &audio_loop_task_handle_);
 #endif
 
+    //TODO: 原来的版本这里有个MainLoop任务
+
     /* Wait for the network to be ready */
     board.StartNetwork();
 
@@ -386,9 +388,12 @@ void Application::Start() {
     // Initialize the protocol
     ESP_LOGI(TAG, "loading protocol...");
 
+    //现在没得从menuconfig进行选择配置,需要打印日志看看
     if (ota_.HasMqttConfig()) {
+        ESP_LOGI(TAG, "MQTT protocol enabled");
         protocol_ = std::make_unique<MqttProtocol>();
     } else if (ota_.HasWebsocketConfig()) {
+        ESP_LOGI(TAG, "Websocket protocol enabled");
         protocol_ = std::make_unique<WebsocketProtocol>();
     } else {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
@@ -397,6 +402,7 @@ void Application::Start() {
 
     protocol_->OnNetworkError([this](const std::string& message) {
         SetDeviceState(kDeviceStateIdle);
+        ESP_LOGI(TAG, "Network error: %s", message.c_str());
         Alert(Lang::Strings::ERROR, message.c_str(), "sad", Lang::Sounds::P3_EXCLAMATION);
     });
     protocol_->OnIncomingAudio([this](AudioStreamPacket&& packet) {
