@@ -64,7 +64,7 @@ BoxAudioCodec::BoxAudioCodec(void* i2c_master_handle, int input_sample_rate, int
 
     es7210_codec_cfg_t es7210_cfg = {};
     es7210_cfg.ctrl_if = in_ctrl_if_;
-    es7210_cfg.mic_selected = ES7120_SEL_MIC1 | ES7120_SEL_MIC2 | ES7120_SEL_MIC3 | ES7120_SEL_MIC4;
+    es7210_cfg.mic_selected = ES7120_SEL_MIC1 | ES7120_SEL_MIC2 | ES7120_SEL_MIC3;
     in_codec_if_ = es7210_codec_new(&es7210_cfg);
     assert(in_codec_if_ != NULL);
 
@@ -200,6 +200,7 @@ void BoxAudioCodec::EnableInput(bool enable) {
         }
         ESP_ERROR_CHECK(esp_codec_dev_open(input_dev_, &fs));
         ESP_ERROR_CHECK(esp_codec_dev_set_in_channel_gain(input_dev_, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(0), 40.0));
+        ESP_ERROR_CHECK(esp_codec_dev_set_in_channel_gain(input_dev_, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(1), 40.0));
     } else {
         ESP_ERROR_CHECK(esp_codec_dev_close(input_dev_));
     }
