@@ -6,9 +6,54 @@
 #include <arpa/inet.h>
 #include <sstream>
 
+#include "wifi_station.h"
+#include "assets/lang_config.h"
+#include "esp_mn_models.h"
+#include "audio_codec.h"
+#include <driver/gpio.h>
+#include "iot/thing_manager.h"
+#include "settings.h"
+#include "led/user_wsrgb.h"
+
 #define DETECTION_RUNNING_EVENT 1
 
 static const char* TAG = "WakeWordDetect";
+
+extern UserWsrgb *ledStrip_;
+static int offline_wakeup_flag = 0;
+
+#if 1 //离线语音
+typedef struct {
+    wakenet_state_t wakeup_state;
+    esp_mn_state_t mn_state;
+    int command_id;
+}sr_result_t;
+
+const char *cmd_phoneme[] = {
+    "da kai fen wei deng",
+    "da kai deng",
+    "kai deng",
+
+    "guan bi fen wei deng",
+    "guan fen wei deng",
+    "guan deng",
+
+    "da kai xiang xun",
+    "kai xiang xun",
+
+    "guan bi xiang xun",
+    "guan xiang xun",
+
+    "tiao gao yin liang",
+    "tiao di yin liang",
+    "da sheng yi dian",
+    "xiao sheng yi dian",
+    "yin liang tiao dao zui da",
+    "yin liang tiao dao zui xiao",
+    "zui da sheng",
+    "zui xiao sheng",
+};
+#endif
 
 WakeWordDetect::WakeWordDetect()
     : afe_data_(nullptr),
@@ -33,6 +78,7 @@ WakeWordDetect::~WakeWordDetect() {
 void WakeWordDetect::Initialize(AudioCodec* codec) {
     codec_ = codec;
     int ref_num = codec_->input_reference() ? 1 : 0;
+    ESP_LOGI(TAG,"Initialize wake word detect, input reference: %d", ref_num);
 
     srmodel_list_t *models = esp_srmodel_init("model");
     for (int i = 0; i < models->num; i++) {
@@ -56,6 +102,8 @@ void WakeWordDetect::Initialize(AudioCodec* codec) {
     for (int i = 0; i < ref_num; i++) {
         input_format.push_back('R');
     }
+    ESP_LOGI(TAG, "Input format: %s", input_format.c_str());
+
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
     afe_config->aec_init = codec_->input_reference();
     afe_config->aec_mode = AEC_MODE_SR_HIGH_PERF;
@@ -65,6 +113,24 @@ void WakeWordDetect::Initialize(AudioCodec* codec) {
     
     afe_iface_ = esp_afe_handle_from_config(afe_config);
     afe_data_ = afe_iface_->create_from_config(afe_config);
+    ESP_LOGI(TAG,"load wakenet :%s",afe_config->wakenet_model_name);
+
+    char* mn_name = esp_srmodel_filter(models, ESP_MN_PREFIX, NULL);
+    multinet_ = esp_mn_handle_from_name(mn_name);
+    model_data_ = multinet_->create(mn_name,6000);
+    ESP_LOGI(TAG,"load multinet :%s",mn_name);
+
+    esp_mn_commands_clear();
+    for(int i=0;i<sizeof(cmd_phoneme)/sizeof(cmd_phoneme[0]);i++){
+        esp_mn_commands_add(i,(char*)cmd_phoneme[i]);
+    }
+    esp_mn_commands_update();
+    esp_mn_commands_print();
+    multinet_->print_active_speech_commands(model_data_);
+
+    result_queue_ = xQueueCreate(1, sizeof(sr_result_t));
+
+    xTaskCreate(SrHandlerTask,"sr_handler_task",1024*4,result_queue_,2,NULL);
 
     xTaskCreate([](void* arg) {
         auto this_ = (WakeWordDetect*)arg;
@@ -106,6 +172,132 @@ size_t WakeWordDetect::GetFeedSize() {
     return afe_iface_->get_feed_chunksize(afe_data_) * codec_->input_channels();
 }
 
+void WakeWordDetect::SrHandlerTask(void* pvParam) {
+    QueueHandle_t resQueue = (QueueHandle_t)pvParam;
+
+    while(true){
+        sr_result_t result;
+        xQueueReceive(resQueue, &result, portMAX_DELAY);
+        
+        ESP_LOGI(TAG, "wakeup_state: %d, mn_state: %d, command_id: %d",result.wakeup_state, result.mn_state, result.command_id);
+
+        if(result.mn_state == ESP_MN_STATE_TIMEOUT){
+            ESP_LOGI(TAG,"Sr result timeout");
+            continue;
+        }
+
+        if(result.wakeup_state == WAKENET_DETECTED){
+            ESP_LOGI(TAG,"Sr result wakeup detected");
+            continue;
+        }
+
+        if(result.mn_state == ESP_MN_STATE_DETECTED){
+            switch(result.command_id){
+                //开氛围灯
+                case 0:
+                case 1:
+                case 2:
+                {
+                    ESP_LOGI(TAG, "SR result command turnon the light");
+                    if(ledStrip_->GetLedPowerState()){
+                        ESP_LOGI(TAG, "Led already on");
+                    }
+                    else{
+                        Settings settings("led_strip");
+                        int brightness = settings.GetInt("brightness", 4);
+                        ledStrip_->TurnOn((uint8_t)brightness);
+                    }
+                }break;
+
+                //关氛围灯
+                case 3:
+                case 4:
+                case 5:
+                {
+                    ESP_LOGI(TAG, "SR result command turnoff the light");
+                    if(ledStrip_->GetLedPowerState()){
+                        ledStrip_->TurnOff();
+                    }
+                    else{
+                        ESP_LOGI(TAG, "Led already off");
+                    }
+                }break;
+
+                //打开香熏
+                case 6:
+                case 7:
+                {
+                    ESP_LOGI(TAG, "SR result command turnon the aroma");
+
+                    gpio_set_level(GPIO_NUM_39, 1);
+                }break;
+
+                //关闭香熏
+                case 8:
+                case 9:
+                {
+                    ESP_LOGI(TAG, "SR result command turnoff the aroma");
+                    gpio_set_level(GPIO_NUM_39, 0);
+                }break;
+
+                //调高音量
+                case 10:
+                case 12:
+                {
+                    ESP_LOGI(TAG, "SR result command increase the volume");
+                    auto codec = Board::GetInstance().GetAudioCodec();
+                    int currVolume = codec->output_volume();
+                    if(currVolume < 90){
+                        currVolume += 10;
+                        if(currVolume >= 90){
+                            currVolume = 90;
+                        }
+                        codec->SetOutputVolume(currVolume);
+                    }
+                }break;
+
+                //调低音量
+                case 11:
+                case 13:
+                {
+                    ESP_LOGI(TAG, "SR result command decrease the volume");
+                    auto codec = Board::GetInstance().GetAudioCodec();
+                    int currVolume = codec->output_volume();
+                    if(currVolume > 50){
+                        currVolume -= 10;
+                        if(currVolume <= 50){
+                            currVolume = 50;
+                        }
+                        codec->SetOutputVolume(currVolume);
+                    }
+                }break;
+
+                //最大音量
+                case 14:
+                case 16:
+                {
+                    ESP_LOGI(TAG, "SR result command max the volume");
+                    auto codec = Board::GetInstance().GetAudioCodec();
+                    codec->SetOutputVolume(90);
+                }break;
+
+                //最小音量
+                case 15:
+                case 17:
+                {
+                    ESP_LOGI(TAG, "SR result command min the volume");
+                    auto codec = Board::GetInstance().GetAudioCodec();
+                    codec->SetOutputVolume(50);
+                }break;
+
+                default:
+                break;
+            }
+        }
+    }
+    vTaskDelete(NULL);
+}
+
 void WakeWordDetect::AudioDetectionTask() {
     auto fetch_size = afe_iface_->get_fetch_chunksize(afe_data_);
     auto feed_size = afe_iface_->get_feed_chunksize(afe_data_);
@@ -124,11 +316,76 @@ void WakeWordDetect::AudioDetectionTask() {
         StoreWakeWordData((uint16_t*)res->data, res->data_size / sizeof(uint16_t));
 
         if (res->wakeup_state == WAKENET_DETECTED) {
-            StopDetection();
-            last_detected_wake_word_ = wake_words_[res->wake_word_index - 1];
+            if(WifiStation::GetInstance().IsConnected()){
+                StopDetection();
+                last_detected_wake_word_ = wake_words_[res->wake_word_index - 1];
 
-            if (wake_word_detected_callback_) {
-                wake_word_detected_callback_(last_detected_wake_word_);
+                if(wake_word_detected_callback_){
+                    wake_word_detected_callback_(last_detected_wake_word_);
+                }
+            }
+            else{
+                multinet_->clean(model_data_);
+            }
+        }
+
+        if((res->raw_data_channels==1) && (res->wakeup_state==WAKENET_DETECTED)){
+            ESP_LOGI(TAG,"wakenet detected");
+            
+            if(WifiStation::GetInstance().IsConnected()){
+                offline_wakeup_flag = 0;
+            }
+            else{
+                auto &application = Application::GetInstance();
+                application.Alert(Lang::Strings::LISTENING, Lang::Strings::LISTENING, "", Lang::Sounds::P3_1);
+
+                sr_result_t _result = {
+                    .wakeup_state = WAKENET_DETECTED,
+                    .mn_state = ESP_MN_STATE_DETECTING,
+                    .command_id = 0,
+                };
+                xQueueSend(result_queue_, &_result, 10);
+                offline_wakeup_flag = 1;
+            }
+        }
+        else if((res->raw_data_channels>1) && (res->wakeup_state==WAKENET_CHANNEL_VERIFIED)){
+            ESP_LOGI(TAG,"wakenet channel verified");
+            offline_wakeup_flag = 1;
+            afe_iface_->disable_wakenet(afe_data_); //TODO: 上面的判断逻辑里面是否也需要加这行代码
+        }
+
+        if(offline_wakeup_flag == 1){
+            esp_mn_state_t mn_state = multinet_->detect(model_data_, res->data);
+
+            if(mn_state == ESP_MN_STATE_DETECTING){
+                continue;
+            }
+
+            if(mn_state == ESP_MN_STATE_DETECTED){
+                esp_mn_results_t *mn_res = multinet_->get_results(model_data_);
+                
+                int sr_command_id = mn_res->command_id[0];
+                sr_result_t result = {
+                   .wakeup_state = WAKENET_NO_DETECT,
+                   .mn_state = mn_state,
+                   .command_id = sr_command_id,
+                };
+                xQueueSend(result_queue_, &result, 10);
+                ESP_LOGI(TAG,"Detect command id:%d",sr_command_id);
+            }
+
+            if(mn_state == ESP_MN_STATE_TIMEOUT){
+                ESP_LOGI(TAG,"Multinet result timeout");
+                esp_mn_results_t *mn_res = multinet_->get_results(model_data_);
+                sr_result_t result = {
+                    .wakeup_state = WAKENET_NO_DETECT,
+                    .mn_state = mn_state,
+                    .command_id = 0,
+                };
+                xQueueSend(result_queue_, &result, 10);
+                offline_wakeup_flag = 0;
+                afe_iface_->enable_wakenet(afe_data_);
+                continue;
             }
         }
     }

@@ -4,8 +4,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
+#include <freertos/queue.h>
 
 #include <esp_afe_sr_models.h>
+#include <esp_mn_speech_commands.h>
 #include <esp_nsn_models.h>
 
 #include <list>
@@ -36,6 +38,9 @@ public:
 private:
     esp_afe_sr_iface_t* afe_iface_ = nullptr;
     esp_afe_sr_data_t* afe_data_ = nullptr;
+    esp_mn_iface_t* multinet_ = nullptr;
+    model_iface_data_t* model_data_ = nullptr;
+    QueueHandle_t result_queue_ = nullptr;
     char* wakenet_model_ = NULL;
     std::vector<std::string> wake_words_;
     EventGroupHandle_t event_group_;
@@ -53,6 +58,7 @@ private:
 
     void StoreWakeWordData(uint16_t* data, size_t size);
     void AudioDetectionTask();
+    static void SrHandlerTask(void* pvParam);
 };
 
 #endif
