@@ -43,6 +43,8 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
     username_ = settings.GetString("username");
     password_ = settings.GetString("password");
     publish_topic_ = settings.GetString("publish_topic");
+    ESP_LOGI(TAG, "MQTT endpoint: %s, client_id: %s, username: %s, password: %s, publish_topic: %s",
+        endpoint_.c_str(), client_id_.c_str(), username_.c_str(), password_.c_str(), publish_topic_.c_str());
 
     if (endpoint_.empty()) {
         ESP_LOGW(TAG, "MQTT endpoint is not specified");
@@ -61,6 +63,7 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
 
     mqtt_->OnMessage([this](const std::string& topic, const std::string& payload) {
         cJSON* root = cJSON_Parse(payload.c_str());
+        // ESP_LOGI(TAG, "Received message: %s, payload: %s", topic.c_str(), payload.c_str());
         if (root == nullptr) {
             ESP_LOGE(TAG, "Failed to parse json message %s", payload.c_str());
             return;
@@ -73,6 +76,7 @@ bool MqttProtocol::StartMqttClient(bool report_error) {
         }
 
         if (strcmp(type->valuestring, "hello") == 0) {
+            ESP_LOGI(TAG,"Received hello message");
             ParseServerHello(root);
         } else if (strcmp(type->valuestring, "goodbye") == 0) {
             auto session_id = cJSON_GetObjectItem(root, "session_id");
