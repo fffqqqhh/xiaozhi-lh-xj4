@@ -337,7 +337,7 @@ void WakeWordDetect::AudioDetectionTask() {
             }
             else{
                 auto &application = Application::GetInstance();
-                application.Alert(Lang::Strings::LISTENING, Lang::Strings::LISTENING, "", Lang::Sounds::P3_1);
+                application.Alert(Lang::Strings::LISTENING, Lang::Strings::LISTENING, "", Lang::Sounds::P3_IAMHERE);
 
                 sr_result_t _result = {
                     .wakeup_state = WAKENET_DETECTED,
