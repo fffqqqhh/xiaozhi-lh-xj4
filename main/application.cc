@@ -26,7 +26,7 @@
 
 #define TAG "Application"
 
-static bool _connected_tips = false;
+static bool _welcome_tips = false;
 
 static const char* const STATE_STRINGS[] = {
     "unknown",
@@ -533,8 +533,8 @@ void Application::Start() {
                 } else {
                     voice_detected_ = false;
                 }
-                auto led = Board::GetInstance().GetLed();
-                led->OnStateChanged();
+                // auto led = Board::GetInstance().GetLed();
+                // led->OnStateChanged();
             });
         }
     });
@@ -552,6 +552,7 @@ void Application::Start() {
                     return;
                 }
                 
+                //TODO: 这里是不是可以通过判断mqtt连接状态再进行发送
                 AudioStreamPacket packet;
                 // Encode and send the wake word data to the server
                 while (wake_word_detect_.GetWakeWordOpus(packet.payload)) {
@@ -801,6 +802,10 @@ void Application::SetDeviceState(DeviceState state) {
 #if CONFIG_USE_WAKE_WORD_DETECT
             wake_word_detect_.StartDetection();
 #endif
+            if(false == _welcome_tips){
+                Alert("PowerOn", "PowerOn", "",Lang::Sounds::P3_WELCOME);
+                _welcome_tips = true;
+            }
             break;
         case kDeviceStateConnecting:
             break;
