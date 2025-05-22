@@ -4,7 +4,7 @@
 
 #define TAG "UserWsrgb"
 
-#define DEFAUT_BRIGHTNESS   5
+#define DEFAULT_BRIGHTNESS   5
 
 #define BRIGHT_MAX          10000
 #define BRIGHT_ATTE         1
@@ -24,7 +24,7 @@ UserWsrgb::UserWsrgb(gpio_num_t gpio, uint8_t maxLeds) : maxLeds_(maxLeds) {
         rgbColors_[i].g = 0;
         rgbColors_[i].b = 0;
     }
-    brightness_ = DEFAUT_BRIGHTNESS;
+    brightness_ = DEFAULT_BRIGHTNESS;
 
     led_strip_config_t strip_config = {};
     strip_config.strip_gpio_num = gpio;
@@ -55,6 +55,7 @@ UserWsrgb::~UserWsrgb() {
         led_strip_del(ledStrip_);
     }
     if(stripTimer_ != nullptr){
+        esp_timer_stop(stripTimer_);
         esp_timer_delete(stripTimer_);
     }
 }
@@ -267,16 +268,17 @@ void UserWsrgb::TurnOff(){
 void UserWsrgb::SetSingleColor(uint8_t index,RGBColor color){
     if(stripTimer_ != nullptr)
         esp_timer_stop(stripTimer_);
-    for(int i = 0; i < maxLeds_; i++){
-        RgbToHsv(color.r, color.g, color.b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);
-        led_strip_set_pixel(ledStrip_, i, color.r, color.g, color.b);
-        led_strip_refresh(ledStrip_);
-    }
+
+    rgbColors_[index] = color;
+    RgbToHsv(color.r, color.g, color.b, &hsvColors_[index].h, &hsvColors_[index].s, &hsvColors_[index].v);
+    led_strip_set_pixel(ledStrip_, index, color.r, color.g, color.b);
+    led_strip_refresh(ledStrip_);
 }
 
 void UserWsrgb::SetAllColor(RGBColor color){
     if(stripTimer_ != nullptr)
-    esp_timer_stop(stripTimer_);
+        esp_timer_stop(stripTimer_);
+
     for(int i = 0; i < maxLeds_; i++){
         rgbColors_[i] = color;
         RgbToHsv(color.r, color.g, color.b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);
@@ -296,8 +298,8 @@ void UserWsrgb::SetAlwaysMode(){
 }
 
 void UserWsrgb::SetBlinkMode(RGBColor color, int intervalMs){
-    if(stripTimer_ != nullptr)
-        esp_timer_stop(stripTimer_);
+    // if(stripTimer_ != nullptr)
+    //     esp_timer_stop(stripTimer_);
     for(int i = 0; i < maxLeds_; i++){
         RgbToHsv(color.r, color.g, color.b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);
     }
@@ -316,9 +318,37 @@ void UserWsrgb::SetBlinkMode(RGBColor color, int intervalMs){
     });
 }
 
-void UserWsrgb::SetBreatheMode(RGBColor color, int intervalMs){
+void UserWsrgb::SetRandomMode(int intervalMs){
     if(stripTimer_ != nullptr)
         esp_timer_stop(stripTimer_);
+    
+    if(intervalMs == 0){
+        for(int i = 0; i < maxLeds_; i++){
+            rgbColors_[i].r = rand()%256;
+            rgbColors_[i].g = rand()%256;
+            rgbColors_[i].b = rand()%256;
+            RgbToHsv(rgbColors_[i].r, rgbColors_[i].g, rgbColors_[i].b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);
+            led_strip_set_pixel(ledStrip_, i, rgbColors_[i].r, rgbColors_[i].g, rgbColors_[i].b);
+        }
+        led_strip_refresh(ledStrip_);
+    }
+    else{
+        StartStripTimerTask(intervalMs,[this](){
+            for(int i = 0; i < maxLeds_; i++){
+                rgbColors_[i].r = rand()%256;
+                rgbColors_[i].g = rand()%256;
+                rgbColors_[i].b = rand()%256;
+                RgbToHsv(rgbColors_[i].r, rgbColors_[i].g, rgbColors_[i].b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);
+                led_strip_set_pixel(ledStrip_, i, rgbColors_[i].r, rgbColors_[i].g, rgbColors_[i].b);
+            }
+            led_strip_refresh(ledStrip_);
+        });
+    }
+}
+
+void UserWsrgb::SetBreatheMode(RGBColor color, int intervalMs){
+    // if(stripTimer_ != nullptr)
+    //     esp_timer_stop(stripTimer_);
     for(int i = 0; i < maxLeds_; i++){
         rgbColors_[i] = color;
         RgbToHsv(color.r, color.g, color.b, &hsvColors_[i].h, &hsvColors_[i].s, &hsvColors_[i].v);

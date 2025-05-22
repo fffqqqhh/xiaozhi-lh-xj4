@@ -39,6 +39,7 @@ public:
     
     void SetBlinkMode(RGBColor color,int intervalMs);
     void SetAlwaysMode();
+    void SetRandomMode(int intervalMs);
     void SetBreatheMode(RGBColor color,int intervalMs);
     
     void TurnOn(uint8_t brightness);
