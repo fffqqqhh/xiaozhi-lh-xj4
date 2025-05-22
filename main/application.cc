@@ -86,6 +86,7 @@ void Application::CheckNewVersion() {
         SetDeviceState(kDeviceStateActivating);
 
         if (!ota_.CheckVersion()) {
+        ESP_LOGI(TAG,"ota step 1");
             retry_count++;
             if (retry_count >= MAX_RETRY) {
                 ESP_LOGE(TAG, "Too many retries, exit version check");
@@ -106,10 +107,12 @@ void Application::CheckNewVersion() {
             retry_delay *= 2; // 每次重试后延迟时间翻倍
             continue;
         }
+        ESP_LOGI(TAG,"ota step 2");
         retry_count = 0;
         retry_delay = 10; // 重置重试延迟时间
 
         if (ota_.HasNewVersion()) {
+        ESP_LOGI(TAG,"ota step 3");
             Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "happy", Lang::Sounds::P3_UPGRADE);
 
             vTaskDelay(pdMS_TO_TICKS(3000));
@@ -148,10 +151,12 @@ void Application::CheckNewVersion() {
             Reboot();
             return;
         }
+        ESP_LOGI(TAG,"ota step 4");
 
         // No new version, mark the current version as valid
         ota_.MarkCurrentVersionValid();
         if (!ota_.HasActivationCode() && !ota_.HasActivationChallenge()) {
+        ESP_LOGI(TAG,"ota step 5");
             xEventGroupSetBits(event_group_, CHECK_NEW_VERSION_DONE_EVENT);
             // Exit the loop if done checking new version
             break;
@@ -159,6 +164,7 @@ void Application::CheckNewVersion() {
 
         // Activation code is shown to the user and waiting for the user to input
         if (ota_.HasActivationCode()) {
+        ESP_LOGI(TAG,"ota step 6");
             ShowActivationCode();
         }
 
@@ -496,6 +502,7 @@ void Application::Start() {
                 }
             }
         } else if (strcmp(type->valuestring, "alert") == 0) {
+            ESP_LOGI(TAG,"Alert command received");
             auto status = cJSON_GetObjectItem(root, "status");
             auto message = cJSON_GetObjectItem(root, "message");
             auto emotion = cJSON_GetObjectItem(root, "emotion");
@@ -580,8 +587,9 @@ void Application::Start() {
         std::string message = std::string(Lang::Strings::VERSION) + ota_.GetCurrentVersion();
         ESP_LOGI(TAG,"showing notification: %s", message.c_str());
         // Play the success sound to indicate the device is ready
-        ResetDecoder();
-        PlaySound(Lang::Sounds::P3_SUCCESS);
+        /*这里也会播放声音,且会影响前面播放的声音*/
+        // ResetDecoder();
+        // PlaySound(Lang::Sounds::P3_SUCCESS);
     }
     
     // Enter the main event loop
