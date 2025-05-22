@@ -30,7 +30,7 @@ LedStripCtl::LedStripCtl(UserWsrgb* ledStrip)
         ledState = false;
 
         //灯开关状态和亮度状态是在这个文件处理还是到下一层去处理??
-        properties_.AddNumberProperty("brightness","氛围灯的亮度等级(1-10)",[this]()->int {
+        properties_.AddNumberProperty("brightness","氛围灯的亮度等级(2-10)",[this]()->int {
             return brightnessLevel;
         });
 
@@ -38,8 +38,8 @@ LedStripCtl::LedStripCtl(UserWsrgb* ledStrip)
             return ledState;
         });
 
-        methods_.AddMethod("SetBrightness","设置氛围灯亮度等级(1-10)",ParameterList({
-            Parameter("brightness","亮度等级(1-10)",kValueTypeNumber,true)
+        methods_.AddMethod("SetBrightness","设置氛围灯亮度等级(2-10)",ParameterList({
+            Parameter("brightness","亮度等级(2-10)",kValueTypeNumber,true)
         }),[this](const ParameterList& parameters) {
             uint8_t brightness = static_cast<uint8_t>(parameters["brightness"].number());
             ESP_LOGI(TAG,"Set LedStrip Brightness to %d",brightness);
@@ -58,7 +58,7 @@ LedStripCtl::LedStripCtl(UserWsrgb* ledStrip)
         });
 
         methods_.AddMethod("TurnOn","打开氛围灯",ParameterList({
-            Parameter("brightness","亮度等级(1-10)",kValueTypeNumber,true)
+            Parameter("brightness","亮度等级(2-10)",kValueTypeNumber,true)
         }),[this](const ParameterList& parameters) {
             uint8_t brightness = static_cast<uint8_t>(parameters["brightness"].number());
             ledState = true;
@@ -132,5 +132,12 @@ LedStripCtl::LedStripCtl(UserWsrgb* ledStrip)
 
         methods_.AddMethod("SetAlways","设置成常亮模式", ParameterList(),[this](const ParameterList& parameters){
             ledStrip_->SetAlwaysMode();
+        });
+
+        methods_.AddMethod("Random","随机效果",ParameterList({
+            Parameter("interval","间隔时间(ms)",kValueTypeNumber,false)
+        }),[this](const ParameterList& parameters){
+            int interval = parameters["interval"].number();
+            ledStrip_->SetRandomMode(interval);
         });
     }
