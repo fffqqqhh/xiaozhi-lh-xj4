@@ -210,6 +210,7 @@ private:
 public:
     LanheXJ4Board():user_button_(BOOT_BUTTON_GPIO){
         InitializeI2c();
+        InitializeEncoder();
         InitializeButtons();
         InitializeIot();
     }
@@ -229,6 +230,10 @@ public:
             AUDIO_CODEC_ES7210_ADDR, 
             AUDIO_INPUT_REFERENCE);
         return &audio_codec;
+    }
+
+    virtual Led* GetLed() override{
+        return ledStrip_;
     }
 };
 
