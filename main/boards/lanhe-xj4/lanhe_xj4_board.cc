@@ -201,6 +201,7 @@ private:
     void InitializeIot() {
         auto& thing_manager = iot::ThingManager::GetInstance();
         thing_manager.AddThing(iot::CreateThing("Speaker"));
+        thing_manager.AddThing(iot::CreateThing("UserFPC"));
         
         ledStrip_ = new UserWsrgb(GPIO_NUM_40, 12);
         auto ledStripCtl_ = new LedStripCtl(ledStrip_);
